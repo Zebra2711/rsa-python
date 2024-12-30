@@ -1,13 +1,26 @@
 from base64 import b64encode, b64decode
 import struct
 import random
-from math import gcd
+import time
+
+import prime_list
+
+from xgcd.xgcd import *
+from xgcd.util import print_debug
+
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import cpu_count
+from functools import lru_cache
+
 
 PUBLIC_KEY = 0
 PRIVATE_KEY = 1
 NOT_KEY = 2
-BASIC = 0
 CRT = 1
+FXGCD = True # Fast Large-Integer Extended GCD Flag
+DEBUG = True
+PAIR = 0
+
 class rsa_key:
     class priv:
         def __init__(self,n ,e ,d=None, p=None, q=None, dp=None, dq=None, qinv=None):
@@ -23,6 +36,17 @@ class rsa_key:
         def __init__(self,n,e):
             self.n = n
             self.e = e
+    @staticmethod
+    @lru_cache(maxsize=1024)
+    def miller_rabin_witness(n, a, d, r):
+        x = pow(a, d, n)
+        if x == 1 or x == n - 1:
+            return True
+        for _ in range(r - 1):
+            x = pow(x, 2, n)
+            if x == n - 1:
+                return True
+        return False
 
     @staticmethod
     def miller_rabin(n, k=40):
@@ -37,22 +61,16 @@ class rsa_key:
             r += 1
             d //= 2
 
-        # Witness loop
-        for _ in range(k):
-            a = random.randrange(2, n - 1)
-            x = pow(a, d, n)
-            if x == 1 or x == n - 1:
-                continue
-            for _ in range(r - 1):
-                x = (x * x) % n
-                if x == n - 1:
-                    break
-            else:
-                return False
-        return True
+        # Use list prime numbers as first witnesses
+        small_primes = prime_list.list
+        witnesses = small_primes[:min(k, len(small_primes))]
+        witnesses.extend(random.randrange(2, n - 1) for _ in range(k - len(witnesses)))
+        
+        return all(rsa_key.miller_rabin_witness(n, a, d, r) for a in witnesses)
 
     @staticmethod
     def generate_prime(bits):
+        # print("Generate prime...")
         while True:
             n = random.getrandbits(bits)
             n |= (1 << bits - 1) | 1  # Make sure it's odd and has the right bit length
@@ -61,12 +79,26 @@ class rsa_key:
 
     @staticmethod
     def extended_gcd(a, b):
-        if a == 0:
-            return b, 0, 1
-        gcd, x1, y1 = rsa_key.extended_gcd(b % a, a)
-        x = y1 - (b // a) * x1
-        y = x1
-        return gcd, x, y
+        # Test fasted
+        if FXGCD==True:
+
+            #print_debug(DEBUG,"Extended GCD...", endl=' ')
+            obj = xgcd_model(a,b,debug_print=False)
+            #print_debug(DEBUG,"Complete.")
+            #print_debug(DEBUG,"==============================")
+            #print_debug(DEBUG,f"GCD:{obj[0]}, A:{obj[1]}, B:{obj[2]}.")
+            #print_debug(DEBUG,"==============================")
+
+            gcd,x,y,_,_ = obj
+            return gcd, x, y
+        else:
+            if a == 0:
+                return b, 0, 1
+            gcd, x1, y1 = rsa_key.extended_gcd(b % a, a)
+            x = y1 - (b // a) * x1
+            y = x1
+            #print_debug(DEBUG,f"GCD:{gcd}, A:{x}, B:{y}.")
+            return gcd, x, y
 
     @staticmethod
     def mod_inverse(e, phi):
@@ -76,26 +108,62 @@ class rsa_key:
         return x % phi
 
     @classmethod
-    def generate(cls, bits=2048):
-        # Generate two prime numbers
-        p = cls.generate_prime(bits // 2)
-        q = cls.generate_prime(bits // 2)
-        n = p * q
+    def generate_prime_multi_process(cls, bits):
+        """Generates two prime numbers concurrently using multiple processes.
         
+        Args:
+            cls: The class containing the `generate_prime` method
+            bits: The number of bits for the prime numbers
+        
+        Returns:
+            tuple: Two prime numbers
+        """
+        worker_count = min(2, cpu_count())
+        
+        with ProcessPoolExecutor(max_workers=worker_count) as executor:
+            futures = [executor.submit(cls.generate_prime, bits) for _ in range(2)]
+            
+            # Use as_completed to get results as soon as they're ready
+            from concurrent.futures import as_completed
+            return [future.result() for future in as_completed(futures)]
+
+
+    @classmethod
+    def generate(cls, bits=2048, multi_process = True):
+        # Generate two prime numbers
+        #print_debug(DEBUG,"Generate prime...",endl=' ')
+        p,q = None,None
+        if multi_process:
+            # print("multi_process...")
+            p,q = cls.generate_prime_multi_process(bits // 2);
+        
+        else:
+            # print("Normal...")
+            p = cls.generate_prime(bits // 2)
+            q = cls.generate_prime(bits // 2)
+        #print(f"p:{p}, q:{q}")
+
+        #print_debug(DEBUG,"Complete.")
+        #print_debug(DEBUG,"==============================")
+        #print_debug(DEBUG,f"p:{p}, q:{q}")
+        #print_debug(DEBUG,"==============================")
+
+        n = p * q
+
         # Calculate Euler's totient function φ(n)
         phi = (p - 1) * (q - 1)
-        
+
         # Choose public exponent e
         e = 65537  # Common choice for e
-        
+
         # Calculate private exponent d
         d = cls.mod_inverse(e, phi)
-        
+
         # Calculate CRT components
         dp = d % (p - 1)
         dq = d % (q - 1)
         qinv = cls.mod_inverse(q, p)
-        
+
         # Create public and private key objects
         public_key = cls.pub(n, e)
         private_key = cls.priv(n, e, d, p, q, dp, dq, qinv)
@@ -107,19 +175,19 @@ class rsa_key:
         value_bytes = value.to_bytes((value.bit_length() + 7) // 8, byteorder='big', signed=False)
         if value_bytes[0] & 0x80:  # Ensure the integer is positive
             value_bytes = b'\x00' + value_bytes
-        
+
         length = len(value_bytes)
         if length <= 127:  # Short-form length
             length_bytes = length.to_bytes(1, byteorder='big')
         else:  # Long-form length
             length_bytes = (0x80 | ((length.bit_length() + 7) // 8)).to_bytes(1, byteorder='big')
             length_bytes += length.to_bytes((length.bit_length() + 7) // 8, byteorder='big')
-        
+
         return b'\x02' + length_bytes + value_bytes
 
 
     @classmethod
-    def encode(cls,key,type=True):
+    def encode_asn1(cls,key,type=True):
         """Encode the RSA key as an ASN.1 DER SEQUENCE."""
         elements = None
         if type == NOT_KEY:
@@ -149,7 +217,7 @@ class rsa_key:
             # Long-form length encoding
             length_bytes = (0x80 | ((sequence_length.bit_length() + 7) // 8)).to_bytes(1, byteorder='big')
             length_bytes += sequence_length.to_bytes((sequence_length.bit_length() + 7) // 8, byteorder='big')
-        
+
         encoded_key = b'\x30' + length_bytes + sequence_body
         return b64encode(encoded_key).decode()
 
@@ -170,7 +238,7 @@ class rsa_key:
             return int.from_bytes(value_bytes, byteorder='big'), data[2 + length:]
 
     @classmethod
-    def decode(cls, data, type=True):
+    def decode_asn1(cls, data, type=True):
         """Decode an RSA key from an ASN.1 DER SEQUENCE."""
         data = b64decode(data.encode())
         if data[0] != 0x30:
@@ -191,7 +259,7 @@ class rsa_key:
                     integers.append(value)
                 except (ValueError, IndexError):
                     break
-            return integers          
+            return integers
         else: # KEY
             n, body = cls.decode_asn1_integer(body)
             e, body = cls.decode_asn1_integer(body)
@@ -203,15 +271,17 @@ class rsa_key:
                 dq, body = cls.decode_asn1_integer(body)
                 qinv, _ = cls.decode_asn1_integer(body)
                 return cls.priv(n,e,d,p,q,dp,dq,qinv)
-            else:
+            elif type == PUBLIC_KEY:
                 return cls.pub(n,e)
-            
-PAIR = 0
+            else:
+                raise ValueError("Invalid key type")
+
+
 class RSA:
     def __init__(self, key):
         self.key=key
     def RSAEP(self,m):
-        key = vars(rsa_key.decode(self.key,0))
+        key = vars(rsa_key.decode_asn1(self.key,0))
         n = key['n']
         e = key['e']
         # c = m^e mod n
@@ -219,32 +289,37 @@ class RSA:
         for c_i in c:
             if c_i > n:
                 raise ValueError("Ciphertex inavlid")
-        return rsa_key.encode(c,type=NOT_KEY)
-        
+        return rsa_key.encode_asn1(c,type=NOT_KEY)
+
     def RSADP(self,c,key_form = CRT):
-        # get key
-        c = rsa_key.decode(c,type=NOT_KEY)
-        priv_key = vars(rsa_key.decode(self.key))
+
+        # Get cyphert text
+        c = rsa_key.decode_asn1(c,type=NOT_KEY)
+        # Get private key
+        priv_key = vars(rsa_key.decode_asn1(self.key))
+
         if priv_key == None:
             raise ValueError("INVALID_PRIVATE_KEY")
         n = priv_key['n']
-        p = priv_key['p']
-        dp = priv_key['dp']
-        q = priv_key['q']
-        dq = priv_key['dq']
-        qinv = priv_key['qinv']
         m = []
-        if key_form == PAIR:            
+        if key_form == PAIR:
+            d = priv_key['d']
             m = [pow(c_i,d,n) for c_i in c]
         else:
+            p = priv_key['p']
+            dp = priv_key['dp']
+            q = priv_key['q']
+            dq = priv_key['dq']
+            qinv = priv_key['qinv']
+
             for c_i in c:
                 # 2.2 Let m_1 = c^dP mod p.
                 m_1 = pow(c_i,dp,p)
-                #2.3 Let m_2 = c^dQ mod q.
+                # 2.3 Let m_2 = c^dQ mod q.
                 m_2 = pow(c_i,dq,q)
-                #2.4 Let h = qInv ( m_1 - m_2 ) mod p.
+                # 2.4 Let h = qInv ( m_1 - m_2 ) mod p.
                 h = pow(qinv*(m_1 - m_2),1, p)
-                #2.5 Let m = m_2 + hq.
+                # 2.5 Let m = m_2 + hq.
                 m_i = m_2 + h*q
                 if m_i > n:
                     raise ValueError("Ciphertex inavlid")
@@ -256,103 +331,34 @@ class RSA:
             # Fallback for partial bytes
             return bytes([i % 256 for i in m]).decode('utf-8', errors='replace')
 
-    def encrypt(self,m,mode=BASIC):
-        n = len(m)
-        c = []
-        if mode == BASIC:
-            for ch in m:
-                t_c = ch**2 % 3
-                c.append(t_c)
-        return ''.join(c)
-    def decrypt(self,key):
-        return
+    def encrypt(self,m):
+        return  self.RSAEP(m)
+    def decrypt(self,c,key_form = CRT):
+        return  self.RSADP(c,key_form)
 
-# Example Usage
-private_key_test = rsa_key.priv(
-    n=119804358589858644765221877549031317428421793169529619015017035148384373331588708250559706937964533013912466456159861052033183530768187408065883203743172073032605882094995169159012628394796247305000768589287207171193112355182932682868233823669460266648742193878806746540150812713265025918931473273940617379341,
-    e=65537,
-    d=106600414526283122676337772058443508926575651111401959248084339955183886147645817369167626689968472438062339883188216387510308137589698651356545358241593832313386664321337106681626487700416644455858577695017816213777721379443488277768733460815264369384861873095290119265671695181560821821783096125368474995521,
-    p=11566986730936860971910390078849278858098272684424077553791128622900966264328729763844321012962641096026515406397977404619149939073000444825059285211420809,
-    q=10357438923088931776550441064406061930351159891168701394279293653530689078216947924230103840846272356312833681438072738204279209761613925157478841129013349,
-    dp=96719543594509968607151590143116175812714244336243564695935707849760128062806413332723315304385725935311815351726377736718100715809454869220936086422305,
-    dq=7581157897684911688376408103202142160900638417677992674116571044751318416803744326492181229616791811226126183660899175300353597086601766785239788347937353,
-    qinv=2329944665090987338560595738197238447371796287202569281514887490447756566514464885724105909481310943154811363003736545418041764952931797296683430290492436
-)
-public_key_test = rsa_key.pub(
-    n=119804358589858644765221877549031317428421793169529619015017035148384373331588708250559706937964533013912466456159861052033183530768187408065883203743172073032605882094995169159012628394796247305000768589287207171193112355182932682868233823669460266648742193878806746540150812713265025918931473273940617379341,
-    e=65537
-)
-
-
-
-
-import resource
-import platform
-import sys
-
-def memory_limit_mb(limit_mb: int):
-    """
-    Sets the memory limit in MB for the current process on Linux.
-
-    Args:
-        limit_mb: The memory limit in MB.
-    """
-    if platform.system() != "Linux":
-        print('Only works on Linux!')
-        return
-
-    # Convert limit_mb to bytes
-    limit_bytes = limit_mb * 1024 * 1024
-
-    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
-    resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, hard))
-
-def memory(limit_mb: int):
-    """
-    Decorator to limit memory usage for the decorated function.
-
-    Args:
-        limit_mb: The memory limit in MB.
-
-    Raises:
-        MemoryError: If the memory limit is exceeded.
-    """
-    def decorator(function):
-        def wrapper(*args, **kwargs):
-            memory_limit_mb(limit_mb)
-            try:
-                return function(*args, **kwargs)
-            except MemoryError:
-                print(f"Memory limit of {limit_mb} MB exceeded.")
-                sys.exit(1)
-        return wrapper
-    return decorator
-@memory(limit_mb=1)
-
-def decore_string(Strings,line_len=50):
+def decore_string(Strings,line_len=70):
     return "\n".join(Strings[i:i+line_len] for i in range(0, len(Strings), line_len))
 
 def debug():
-    public_key, private_key = rsa_key.generate()
-    epriv_key = rsa_key.encode(private_key)
-    dpriv_key = rsa_key.decode(epriv_key,type=PRIVATE_KEY)
-    epub_key = rsa_key.encode(public_key,type=PUBLIC_KEY)
-    dpub_key = rsa_key.decode(epub_key,0)
+    DEBUG = True
+    # #print_debug(DEBUG,"\nTEST\n=======================================")
+    # public_key, private_key = rsa_key.generate(bits=4096)
+    # epriv_key = rsa_key.encode_asn1(private_key)
+    # dpriv_key = rsa_key.decode_asn1(epriv_key,type=PRIVATE_KEY)
+    # epub_key = rsa_key.encode_asn1(public_key,type=PUBLIC_KEY)
+    # dpub_key = rsa_key.decode_asn1(epub_key,0)
 
-    pub = decore_string(epub_key)
-    priv = decore_string(epriv_key)
-    print(f"\n-----BEGIN RSA PUBLIC KEY-----\n{pub}\n-----END RSA PUBLIC KEY-----\n")
-    #print("Detail:{vars(dpub_key)}")
-    print(f"\n-----BEGIN RSA PRIVATE KEY-----\n{priv}\n-----END RSA PRIVATE KEY-----\n")
-    #print("Detail: {vars(dpriv_key)}")
-    print("\nTEST\n=======================================")
-    mesage = "hello 只在linux操作系统起作用"
-    # mesage = "zebra2711"
-    print("\nCYPHER TEXT:\n")
-    c = RSA(epub_key).RSAEP(mesage)
-    print(decore_string(c,150))
-    print("\n\nPLAIN TEXT:\n")
-    m = RSA(epriv_key).RSADP(c)
-    print(m)
+    # pub = decore_string(epub_key)
+    # priv = decore_string(epriv_key)
+    # print(f"\n-----BEGIN RSA PUBLIC KEY-----\n{pub}\n-----END RSA PUBLIC KEY-----\n")
+    # #print_debug(DEBUG,f"Detail:{vars(dpub_key)}")
+    # print(f"\n-----BEGIN RSA PRIVATE KEY-----\n{priv}\n-----END RSA PRIVATE KEY-----\n")
+    # #print_debug(DEBUG,f"Detail: {vars(dpriv_key)}")
+    # mesage = "RSA加密演算法"
+    # print("\nCYPHER TEXT:\n")
+    # c = RSA(epub_key).RSAEP(mesage)
+    # print(decore_string(c,90))
+    # print("\n\nPLAIN TEXT:\n")
+    # m = RSA(epriv_key).RSADP(c,PAIR)
+    # print(m)
 
-debug()
