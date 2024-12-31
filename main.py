@@ -57,10 +57,11 @@ def main():
     if test:
         message = "RSA加密演算法"
         print(f"MESSAGE: {message}")
-        print("\nCYPHER TEXT (Test Example):\n")
         epub_key, epriv_key = generate_keys(key_size,mul_proc=mp)
         cypher_text = RSA(epub_key).encrypt(message)
-        print(cypher_text)
+        
+        print("\nCYPHER TEXT (Test Example):\n")
+        print(decore_string(cypher_text,80))
         print("\n\nPLAIN TEXT (Test Example):\n")
         plain_text = RSA(epriv_key).decrypt(cypher_text, key_form=key_format)
         print(plain_text)
