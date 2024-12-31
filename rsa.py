@@ -305,7 +305,7 @@ class RSA:
         if key_form == PAIR:
             d = priv_key['d']
             m = [pow(c_i,d,n) for c_i in c]
-        else:
+        elif key_form == CRT:
             p = priv_key['p']
             dp = priv_key['dp']
             q = priv_key['q']
@@ -325,6 +325,8 @@ class RSA:
                     raise ValueError("Ciphertex inavlid")
                 else:
                     m.append(m_i)
+        else:
+            raise ValueError(f"INVALID KEY FORMAT: {key_form}")
         try:
             return bytes([i % 256 for i in m]).decode('utf-8')
         except UnicodeDecodeError:
