@@ -9,7 +9,7 @@
 
 </div>
 
-## Suport:
+## Support:
 - [ ] GUI
 - [x] CLI
 - [x] Key size: 128,256,512,1024,2048,4069. Larger not tested
