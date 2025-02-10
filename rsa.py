@@ -62,8 +62,7 @@ class rsa_key:
             d //= 2
 
         # Use list prime numbers as first witnesses
-        small_primes = prime_list.list
-        witnesses = small_primes[:min(k, len(small_primes))]
+        witnesses = prime_list.list[:min(k, len(prime_list.list))]
         witnesses.extend(random.randrange(2, n - 1) for _ in range(k - len(witnesses)))
         
         return all(rsa_key.miller_rabin_witness(n, a, d, r) for a in witnesses)
