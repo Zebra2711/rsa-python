@@ -29,19 +29,19 @@ def xgcd_model(a,
     # remove common factors of 2
     # can skip this if gcd known to be 1
     k = 0
-    while (a % 2 == 0 and b % 2 == 0):
+    while (not (a & 1) and not (b & 1)):
         k += 1
-        a = a // 2
-        b = b // 2
+        a = a >> 1
+        b = b >> 1
 
     # if one number is even after common factors of 2
     # have been removed, make odd so both inputs to
     # iterations are odd
     even_case = EvenCase.BOTH_ODD
-    if a % 2 == 0:
+    if not (a & 1):
         a = a + b
         even_case = EvenCase.A_EVEN
-    elif b % 2 == 0:
+    elif not (b & 1):
         b = a + b
         even_case = EvenCase.B_EVEN
 
@@ -69,44 +69,44 @@ def xgcd_model(a,
             iterations += 1
 
             # a is divisible by 8
-            if reduction_factor_even >= 8 and a % 8 == 0:
+            if reduction_factor_even >= 8 and not (a & 7):
                 a, u, l = update_a_b_even(cases, 8, a, u, l, og_b, og_a, debug_print, 9)
                 delta = delta - 3
 
             # a is divisible by 4 but not by 8
-            elif reduction_factor_even >= 4 and a % 4 == 0:
+            elif reduction_factor_even >= 4 and not (a & 3):
                 a, u, l = update_a_b_even(cases, 4, a, u, l, og_b, og_a, debug_print, 1)
                 delta = delta - 2
 
             # a is divisible by 2 but not by 4 or 8
-            elif a % 2 == 0:
+            elif not (a & 1):
                 a, u, l = update_a_b_even(cases, 2, a, u, l, og_b, og_a, debug_print, 2)
                 delta = delta - 1
 
             # b is divisible by 8
-            elif reduction_factor_even >= 8 and b % 8 == 0:
+            elif reduction_factor_even >= 8 and not(b & 7):
                 b, y, n = update_a_b_even(cases, 8, b, y, n, og_b, og_a, debug_print, 10)
                 delta = delta + 3
 
             # b is divisible by 4 but not by 8
-            elif reduction_factor_even >= 4 and b % 4 == 0:
+            elif reduction_factor_even >= 4 and not (b & 3):
                 b, y, n = update_a_b_even(cases, 4, b, y, n, og_b, og_a, debug_print, 3)
                 delta = delta + 2
 
             # b is divisible by 2 but not by 4 or 8
-            elif reduction_factor_even >= 2 and b % 2 == 0:
+            elif reduction_factor_even >= 2 and not (b & 1):
                 b, y, n = update_a_b_even(cases, 2, b, y, n, og_b, og_a, debug_print, 4)
                 delta = delta + 1
 
             # if a, b are odd, then either a + b or a - b will be divisble by 4
 
             # a + b is divisible by 4 and delta >= 0 indicates a should be updated
-            elif reduction_factor_odd >= 4 and delta >= 0 and (b + a) % 4 == 0:
+            elif reduction_factor_odd >= 4 and delta >= 0 and not ((b + a) & 3):
                 a, u, l = update_a_b_odd(cases, 4, a, b, False, u, l, y, n, og_b, og_a, debug_print, 5)
                 delta = delta - 1
 
                 # (a + b) was divisible by 8
-                if reduction_factor_odd >= 8 and a % 2 == 0:
+                if reduction_factor_odd >= 8 and not (a & 1):
                     a, u, l = update_a_b_even(cases, 2, a, u, l, og_b, og_a, debug_print, 16)
                     delta = delta - 1
 
@@ -116,17 +116,17 @@ def xgcd_model(a,
                 delta = delta - 1
 
                 # (a - b) was divisible by 8
-                if reduction_factor_odd >= 8 and a % 2 == 0:
+                if reduction_factor_odd >= 8 and not (a & 1):
                     a, u, l = update_a_b_even(cases, 2, a, u, l, og_b, og_a, debug_print, 18)
                     delta = delta - 1
 
             # a + b is divisible by 4 and delta < 0 indicates b should be updated
-            elif reduction_factor_odd >= 4 and delta < 0 and (b + a) % 4 == 0:
+            elif reduction_factor_odd >= 4 and delta < 0 and not ((b + a) & 3):
                 b, y, n = update_a_b_odd(cases, 4, a, b, False, u, l, y, n, og_b, og_a, debug_print, 7)
                 delta = delta + 1
 
                 # (a + b) was divisible by 8
-                if reduction_factor_odd >= 8 and b % 2 == 0:
+                if reduction_factor_odd >= 8 and not (b & 1):
                     b, y, n = update_a_b_even(cases, 2, b, y, n, og_b, og_a, debug_print, 20)
                     delta = delta + 1
 
@@ -137,7 +137,7 @@ def xgcd_model(a,
                 delta = delta + 1
 
                 # (a - b) was divisible by 8
-                if reduction_factor_odd >= 8 and b % 2 == 0:
+                if reduction_factor_odd >= 8 and not (b & 1):
                     b, y, n = update_a_b_even(cases, 2, b, y, n, og_b, og_a, debug_print, 22)
                     delta = delta + 1
 

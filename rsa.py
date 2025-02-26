@@ -52,19 +52,19 @@ class rsa_key:
     def miller_rabin(n, k=40):
         if n == 2 or n == 3:
             return True
-        if n < 2 or n % 2 == 0:
+        if n < 2 or not (n & 1):
             return False
 
         # Write n-1 as 2^r * d
         r, d = 0, n - 1
-        while d % 2 == 0:
+        while not (d & 1):
             r += 1
-            d //= 2
+            d >>= 1
 
         # Use list prime numbers as first witnesses
         witnesses = prime_list.list[:min(k, len(prime_list.list))]
         witnesses.extend(random.randrange(2, n - 1) for _ in range(k - len(witnesses)))
-        
+
         return all(rsa_key.miller_rabin_witness(n, a, d, r) for a in witnesses)
 
     @staticmethod
@@ -327,10 +327,10 @@ class RSA:
         else:
             raise ValueError(f"INVALID KEY FORMAT: {key_form}")
         try:
-            return bytes([i % 256 for i in m]).decode('utf-8')
+            return bytes([i & 0xFF for i in m]).decode('utf-8')
         except UnicodeDecodeError:
             # Fallback for partial bytes
-            return bytes([i % 256 for i in m]).decode('utf-8', errors='replace')
+            return bytes([i & 0xFF for i in m]).decode('utf-8',errors='replace')
 
     def encrypt(self,m):
         return  self.RSAEP(m)
