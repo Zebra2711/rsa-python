@@ -12,19 +12,19 @@ class EvenCase(IntEnum):
 
 # helper functions
 def bezout_update(u, l, og_b, og_a, debug_print):
-    if u % 2 == 1:
-        assert l % 2 == 1
+    if u & 1:
+        assert l & 1, "Bezout coefficients must have same parity"
 
-        print_debug(debug_print, "in bezout_update ", u, u + og_b, (u + og_b) // 2)
-        print_debug(debug_print, "in bezout_update ", l, l - og_a, (l - og_a) // 2)
+        print_debug(debug_print, "in bezout_update ", u, u + og_b, (u + og_b) >> 1)
+        print_debug(debug_print, "in bezout_update ", l, l - og_a, (l - og_a) >> 1)
 
-        u = (u + og_b) // 2
-        l = (l - og_a) // 2
+        u = (u + og_b) >> 1
+        l = (l - og_a) >> 1
     else:
-        assert l % 2 == 0
+        assert not(l & 1), "Bezout coefficients must have same parity"
 
-        u = u // 2
-        l = l // 2
+        u = u >> 1
+        l = l >> 1
     return u, l
 
 def update_a_b_even(cases, power, a, u, l, og_b, og_a, debug_print, case):
