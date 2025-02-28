@@ -10,7 +10,7 @@ FXGCD = True  # Fast Large-Integer Extended GCD Flag
 PAIR = 0
 
 # Generate an RSA key pair
-public_key, private_key = rsa_key.generate(bits=128, multi_process=True)
+public_key, private_key = rsa_key.generate(bits=4096, multi_process=True)
 epriv_key = rsa_key.encode_asn1(private_key)
 epub_key = rsa_key.encode_asn1(public_key, type=PUBLIC_KEY)
 public_key = epub_key
@@ -20,7 +20,7 @@ private_key = epriv_key
 rsa = RSA(private_key)
 
 # Sample plaintext message (convert to bytes)
-plaintext = "If you're computing modular inverses frequently (e.g., in cryptographic applications), you should use Montgomery reduction. It avoids expensive division using bitwise operations and shifts."
+plaintext = "If you're computing modular inverses frequently (e.g., in cryptographic applications), you should use Montgomery reduction. It avoids expensive division using bitwise operations and shifts. RSA加密演法"
 
 # Encrypt the message
 ciphertext = rsa.encrypt(plaintext)

@@ -36,7 +36,7 @@ def main():
     parser.add_argument("-i", "--input", type=str ,help="Input string for encryption or decryption")
     parser.add_argument("-a", "--auto", help="Auto generate key",action="store_true")
     parser.add_argument("-k", "--key", type=str,help="Private key to decrypt")
-    parser.add_argument("-kf", "--key-format", type=str, default="CRT", choices=["PAIR", "CRT"], 
+    parser.add_argument("-kf", "--key-format", type=str, default="CRT", choices=["PAIR", "CRT"],
                         help="Key format to decrypt: PAIR (n, d) or CRT (n, p, q, dP, dQ, qInv)")
 
     # Parse arguments
@@ -59,7 +59,7 @@ def main():
         print(f"MESSAGE: {message}")
         epub_key, epriv_key = generate_keys(key_size,mul_proc=mp)
         cypher_text = RSA(epub_key).encrypt(message)
-        
+
         print("\nCYPHER TEXT (Test Example):\n")
         print(decore_string(cypher_text,80))
         print("\n\nPLAIN TEXT (Test Example):\n")
