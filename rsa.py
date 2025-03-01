@@ -93,8 +93,8 @@ class rsa_key:
         else:
             if a == 0:
                 return b, 0, 1
-            gcd, x1, y1 = rsa_key.extended_gcd(b % a, a)
-            x = y1 - (b // a) * x1
+            gcd, x1, y1 = rsa_key.extended_gcd(pow(b,1,a), a)
+            x = y1 - (b // a) * x1 # TODO: make b//a faster solution
             y = x1
             #print_debug(DEBUG,f"GCD:{gcd}, A:{x}, B:{y}.")
             return gcd, x, y
@@ -104,24 +104,24 @@ class rsa_key:
         gcd, x, _ = rsa_key.extended_gcd(e, phi)
         if gcd != 1:
             raise ValueError("Modular inverse does not exist")
-        return x % phi
+        return pow(x,1,phi) #x % phi
 
     @classmethod
     def generate_prime_multi_process(cls, bits):
         """Generates two prime numbers concurrently using multiple processes.
-        
+
         Args:
             cls: The class containing the `generate_prime` method
             bits: The number of bits for the prime numbers
-        
+
         Returns:
             tuple: Two prime numbers
         """
         worker_count = min(2, cpu_count())
-        
+
         with ProcessPoolExecutor(max_workers=worker_count) as executor:
             futures = [executor.submit(cls.generate_prime, bits) for _ in range(2)]
-            
+
             # Use as_completed to get results as soon as they're ready
             from concurrent.futures import as_completed
             return [future.result() for future in as_completed(futures)]
@@ -131,15 +131,16 @@ class rsa_key:
     def generate(cls, bits=2048, multi_process = True):
         # Generate two prime numbers
         #print_debug(DEBUG,"Generate prime...",endl=' ')
+        _bits = bits >> 1
         p,q = None,None
         if multi_process:
             # print("multi_process...")
-            p,q = cls.generate_prime_multi_process(bits // 2);
-        
+            p,q = cls.generate_prime_multi_process(_bits);
+
         else:
             # print("Normal...")
-            p = cls.generate_prime(bits // 2)
-            q = cls.generate_prime(bits // 2)
+            p = cls.generate_prime(_bits)
+            q = cls.generate_prime(_bits)
         #print(f"p:{p}, q:{q}")
 
         #print_debug(DEBUG,"Complete.")
@@ -159,8 +160,8 @@ class rsa_key:
         d = cls.mod_inverse(e, phi)
 
         # Calculate CRT components
-        dp = d % (p - 1)
-        dq = d % (q - 1)
+        dp = pow(d,1,p-1) #d % (p - 1)
+        dq = pow(d,1,q-1) #d % (q - 1)
         qinv = cls.mod_inverse(q, p)
 
         # Create public and private key objects
@@ -171,7 +172,7 @@ class rsa_key:
     @staticmethod
     def encode_asn1_integer(value):
         """Encode an integer in ASN.1 DER format."""
-        value_bytes = value.to_bytes((value.bit_length() + 7) // 8, byteorder='big', signed=False)
+        value_bytes = value.to_bytes((value.bit_length() + 7) >> 3, byteorder='big', signed=False)
         if value_bytes[0] & 0x80:  # Ensure the integer is positive
             value_bytes = b'\x00' + value_bytes
 
@@ -179,11 +180,10 @@ class rsa_key:
         if length <= 127:  # Short-form length
             length_bytes = length.to_bytes(1, byteorder='big')
         else:  # Long-form length
-            length_bytes = (0x80 | ((length.bit_length() + 7) // 8)).to_bytes(1, byteorder='big')
-            length_bytes += length.to_bytes((length.bit_length() + 7) // 8, byteorder='big')
+            length_bytes = (0x80 | ((length.bit_length() + 7) >> 3)).to_bytes(1, byteorder='big')
+            length_bytes += length.to_bytes((length.bit_length() + 7) >> 3, byteorder='big')
 
         return b'\x02' + length_bytes + value_bytes
-
 
     @classmethod
     def encode_asn1(cls,key,type=True):
@@ -214,8 +214,8 @@ class rsa_key:
             length_bytes = sequence_length.to_bytes(1, byteorder='big')
         else:
             # Long-form length encoding
-            length_bytes = (0x80 | ((sequence_length.bit_length() + 7) // 8)).to_bytes(1, byteorder='big')
-            length_bytes += sequence_length.to_bytes((sequence_length.bit_length() + 7) // 8, byteorder='big')
+            length_bytes = (0x80 | ((sequence_length.bit_length() + 7) >> 3)).to_bytes(1, byteorder='big')
+            length_bytes += sequence_length.to_bytes((sequence_length.bit_length() + 7) >> 3, byteorder='big')
 
         encoded_key = b'\x30' + length_bytes + sequence_body
         return b64encode(encoded_key).decode()
