@@ -2,7 +2,7 @@ from base64 import b64encode, b64decode
 import struct
 import random
 import time
-
+from secrets import randbelow
 import prime_list
 
 from xgcd.xgcd import *
@@ -63,7 +63,7 @@ class rsa_key:
 
         # Use list prime numbers as first witnesses
         witnesses = prime_list.list[:min(k, len(prime_list.list))]
-        witnesses.extend(random.randrange(2, n - 1) for _ in range(k - len(witnesses)))
+        witnesses.extend(randbelow(n - 1) + 2 for _ in range(k - len(witnesses)))
 
         return all(rsa_key.miller_rabin_witness(n, a, d, r) for a in witnesses)
 
