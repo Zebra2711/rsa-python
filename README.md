@@ -18,6 +18,15 @@
 - [x] Cypher text Base64 endcode
 - [x] Plant text UTF-8 endcode
 
+## Test
+
+I tested with a key size of 4096 bits. The plaintext length was 197, and it took 34.58 seconds to encrypt and decrypt.
+Sometimes, encryption took only 4.48 seconds with the same key size and plaintext length. With a 256-bit key, it took only 67.27 milliseconds.
+
+/PS: This was just my test, so it is not an average value, but I think I did my best.
+
+My system infor: Linux 6.13.5-arch1-1, 11th Gen Intel(R) Core(TM) i5-11400H
+
 ## Special Thanks
 
 [xcgd](https://github.com/kavyasreedhar/sreedhar-xgcd-hardware-ches2022.git) - For fast large-integer extended GCD
