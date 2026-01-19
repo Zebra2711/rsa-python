@@ -1,8 +1,7 @@
 from base64 import b64encode, b64decode
 import struct
-import random
 import time
-from secrets import randbelow
+from secrets import randbelow, randbits
 import prime_list
 
 from xgcd.xgcd import *
@@ -71,7 +70,7 @@ class rsa_key:
     def generate_prime(bits):
         # print("Generate prime...")
         while True:
-            n = random.getrandbits(bits)
+            n = randbits(bits)
             n |= (1 << bits - 1) | 1  # Make sure it's odd and has the right bit length
             if rsa_key.miller_rabin(n):
                 return n
